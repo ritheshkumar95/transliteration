@@ -47,22 +47,23 @@ class Corpus(object):
                 tmp_data.append([source, target])
 
             if split == 'train':
+                np.random.seed(111)
                 np.random.shuffle(tmp_data)
                 train_length = len(tmp_data)
-                self.data['train'] = sorted(
-                    tmp_data[:int(.8 * train_length)], key=lambda tup: len(tup[0]))
-                self.data['valid'] = sorted(
-                    tmp_data[int(.8 * train_length):], key=lambda tup: len(tup[0]))
+                self.data['train'] = tmp_data[:int(.9 * train_length)]
+                self.data['valid'] = tmp_data[int(.9 * train_length):]
             else:
-                self.data[split] = sorted(tmp_data, key=lambda tup: len(tup[0]))
+                self.data[split] = tmp_data
 
     def create_epoch_iterator(self, which_set, batch_size=16):
         data = self.data[which_set]
         for i in xrange(0, len(data), batch_size):
             batch_data = data[i: i + batch_size]
+            batch_data = sorted(batch_data, key=lambda tup: len(tup[0]), reverse=True)
             source, target = zip(*batch_data)
 
-            maxlen_source = max([len(x) for x in source])
+            source_lengths = [len(x) for x in source]
+            maxlen_source = max(source_lengths)
             maxlen_target = max([len(x) for x in target])
 
             batch_source = np.full(
@@ -89,7 +90,7 @@ class Corpus(object):
                 torch.from_numpy(batch_target).long()
             ).t().cuda()
 
-            yield source, target
+            yield source, source_lengths, target
 
 
 if __name__ == '__main__':
@@ -98,9 +99,9 @@ if __name__ == '__main__':
     itr = loader.create_epoch_iterator('train')
 
     for i in xrange(10):
-        source, target = itr.next()
+        source, lengths, target = itr.next()
 
-    for i in xrange(source.size(1)):
+    for i in xrange(target.size(1)):
         print "Source: ", ''.join(
             [loader.source_dict.idx2word[x] for x in source.cpu().data.numpy()[:, i]]
         )
