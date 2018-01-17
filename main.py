@@ -58,8 +58,8 @@ def loop(which_set, lr=None):
 
     start_time = time.time()
     itr = dataset.create_epoch_iterator(which_set, cf.batch_size)
-    for i, (source, lengths, target) in enumerate(itr):
-        output = model(source, lengths, target[:-1])
+    for i, (source, source_lengths, target, target_lengths) in enumerate(itr):
+        output = model(source, source_lengths, target[:-1], target_lengths-1)
         output_flat = output.contiguous().view(-1, cf.ntokens_target)
         loss = criterion(output_flat, target[1:].view(-1))
 

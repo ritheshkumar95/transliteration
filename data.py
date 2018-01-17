@@ -50,21 +50,22 @@ class Corpus(object):
                 np.random.seed(111)
                 np.random.shuffle(tmp_data)
                 train_length = len(tmp_data)
-                self.data['train'] = tmp_data[:int(.9 * train_length)]
-                self.data['valid'] = tmp_data[int(.9 * train_length):]
+                self.data['train'] = sorted(tmp_data[:int(.9 * train_length)], key=lambda tup: len(tup[0]))
+                self.data['valid'] = sorted(tmp_data[int(.9 * train_length):], key=lambda tup: len(tup[0]))
             else:
-                self.data[split] = tmp_data
+                self.data[split] = sorted(tmp_data, key=lambda tup: len(tup[0]))
 
     def create_epoch_iterator(self, which_set, batch_size=16):
         data = self.data[which_set]
         for i in xrange(0, len(data), batch_size):
             batch_data = data[i: i + batch_size]
-            batch_data = sorted(batch_data, key=lambda tup: len(tup[0]), reverse=True)
+            batch_data = sorted(batch_data, key=lambda tup: len(tup[1]), reverse=True)
             source, target = zip(*batch_data)
 
-            source_lengths = [len(x) for x in source]
-            maxlen_source = max(source_lengths)
-            maxlen_target = max([len(x) for x in target])
+            source_lengths = np.asarray([len(x) for x in source])
+            target_lengths = np.asarray([len(x) for x in target])
+            maxlen_source = source_lengths.max()
+            maxlen_target = target_lengths.max()
 
             batch_source = np.full(
                 (len(batch_data), maxlen_source),
@@ -90,21 +91,23 @@ class Corpus(object):
                 torch.from_numpy(batch_target).long()
             ).t().cuda()
 
-            yield source, source_lengths, target
+            assert source.size(0) == max(source_lengths)
+            assert target.size(0) == max(target_lengths)
+
+            yield source, source_lengths, target, target_lengths
 
 
 if __name__ == '__main__':
     loader = Corpus()
     loader.process_data()
-    itr = loader.create_epoch_iterator('train')
+    itr = loader.create_epoch_iterator('test', 1)
 
     for i in xrange(10):
-        source, lengths, target = itr.next()
+        source, _, target, _ = itr.next()
 
-    for i in xrange(target.size(1)):
         print "Source: ", ''.join(
-            [loader.source_dict.idx2word[x] for x in source.cpu().data.numpy()[:, i]]
+            [loader.source_dict.idx2word[x] for x in source.cpu().data.numpy()[:, 0]]
         )
         print "Target: ", ''.join(
-            [loader.target_dict.idx2word[x] for x in target.cpu().data.numpy()[:, i]]
+            [loader.target_dict.idx2word[x] for x in target.cpu().data.numpy()[:, 0]]
         )

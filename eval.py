@@ -53,8 +53,12 @@ itr = dataset.create_epoch_iterator('test', 32)
 target_list = []
 generated_list = []
 source_list = []
-for i, (source, lengths, target) in enumerate(itr):
-    output = model.sample(source, lengths, sos, eos)
+for i, (source, source_lengths, target, target_lengths) in enumerate(itr):
+    output = model.sample(
+        source, source_lengths,
+        target.clone(), target_lengths,
+        sos, eos
+        )
     source_list += source.split(1, 1)
     target_list += target.split(1, 1)
     generated_list += output.split(1, 1)

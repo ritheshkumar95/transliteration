@@ -1,8 +1,6 @@
 # coding: utf-8
 import torch
-import torch.nn as nn
-import torch.nn.functional as F
-import time
+from config import load_config
 import os
 from data import Corpus
 import argparse
@@ -12,42 +10,48 @@ import numpy as np
 
 def parse_args():
     parser = argparse.ArgumentParser()
+    parser.add_argument('-p', '--path', required=True)
     parser.add_argument('-l', '--load_path', default=None)
     args = parser.parse_args()
     return args
 
 
-cl_args = parse_args()
+args = parse_args()
 dataset = Corpus()
 dataset.process_data()
+cf = load_config(args.path)
+cf.ntokens_source = len(dataset.source_dict)
+cf.ntokens_target = len(dataset.target_dict)
 sos = dataset.target_dict.word2idx['<sos>']
 eos = dataset.target_dict.word2idx['<eos>']
-args = np.load(os.path.join(cl_args.load_path, 'args.npy')).tolist()
 
 
-model = RNNModel(args).cuda()
+model = RNNModel(cf).cuda()
 model.eval()
-if cl_args.load_path:
-    file = os.path.join(cl_args.load_path, 'model.pt')
-    model.load_state_dict(torch.load(file))
+if args.load_path:
+    model.load_state_dict(
+        torch.load(os.path.join(args.load_path, 'model.pt'))
+    )
 
-itr = dataset.create_epoch_iterator('test', 1)
+itr = dataset.create_epoch_iterator('test', 16)
 for i in xrange(50):
-    source, target = itr.next()
-    output = model.sample(source, sos, eos)
+    source, source_lengths, target, target_lengths = itr.next()
+    output = target.clone()
+    output = model.sample(source, source_lengths, output, target_lengths, sos, eos)
 
-    print "Source: ", ''.join(
-        [dataset.source_dict.idx2word[x]
-            for x in source.cpu().data.numpy()[:, 0]]
-    )
+    for j in xrange(source.size(1)):
+        print "Source: ", ''.join(
+            [dataset.source_dict.idx2word[x]
+                for x in source.cpu().data.numpy()[:, j]]
+        )
 
-    print "Original: ", ''.join(
-        [dataset.target_dict.idx2word[x]
-            for x in target.cpu().data.numpy()[:, 0]]
-    )
-    print "Generated: ", ''.join(
-        [dataset.target_dict.idx2word[x]
-            for x in output.cpu().data.numpy()[:, 0]]
-    )
-    print "\n"
-    raw_input()
+        print "Original: ", ''.join(
+            [dataset.target_dict.idx2word[x]
+                for x in target.cpu().data.numpy()[:, j]]
+        )
+        print "Generated: ", ''.join(
+            [dataset.target_dict.idx2word[x]
+                for x in output.cpu().data.numpy()[:, j]]
+        )
+        print "\n"
+        raw_input()
